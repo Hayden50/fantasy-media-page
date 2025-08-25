@@ -2,27 +2,33 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net/http"
+	"log"
+	"os"
 
-	"github.com/sirupsen/logrus"
+    "github.com/aws/aws-lambda-go/lambda"
+    "github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 )
 
+const port = ":8080"
+
 func main() {
+    mux := http.NewServeMux()
+	mux.HandleFunc("/", homeHandler)
 
-	res, httpErr := http.Get("https://api.sleeper.app/v1/league/1182033902772338688")
-	if httpErr != nil {
-		logrus.Error("error fetching content from sleeper app")
-		return
+	if os.Getenv("LOCAL") == "true" {
+		fmt.Println("Handling request locally on port", port)	
+		log.Fatal(http.ListenAndServe(port, mux))
+	} else {
+		fmt.Println("Starting Lambda")
+
+		// Create a lambda adapter to allow for normal HTTP traffic flow
+		adapter := httpadapter.New(mux)
+		lambda.Start(adapter.ProxyWithContext) // blocking function
 	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		logrus.Error("error reading response body: ", err)
-		return
-	}
-
-	fmt.Printf("HTTP Status: %s\n", res.Status)
-	fmt.Printf("Response Body:\n%s\n", body)
 }
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintln(w, "Welcome to the Home Page")
+}
+
